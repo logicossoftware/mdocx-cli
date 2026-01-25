@@ -1,5 +1,9 @@
 # mdocx-cli
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/logicossoftware/mdocx-cli.svg)](https://pkg.go.dev/github.com/logicossoftware/mdocx-cli)
+[![Go Report Card](https://goreportcard.com/badge/github.com/logicossoftware/mdocx-cli)](https://goreportcard.com/report/github.com/logicossoftware/mdocx-cli)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A command-line toolkit for working with MDOCX v1 containers — a binary format for bundling Markdown documents with embedded media.
 
 ## Features
