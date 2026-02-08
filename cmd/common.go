@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -22,6 +23,7 @@ type headerInfo struct {
 	HeaderFlags    uint16 `json:"header_flags"`
 	FixedHdrSize   uint32 `json:"fixed_header_size"`
 	MetadataLength uint32 `json:"metadata_length"`
+	ReservedClean  bool   `json:"reserved_clean"`
 }
 
 func readHeaderInfo(path string) (*headerInfo, error) {
@@ -41,6 +43,15 @@ func readHeaderInfo(path string) (*headerInfo, error) {
 	copy(actualMagic[:], buf[0:8])
 	magicValid := actualMagic == expectedMagic
 
+	// Check that reserved bytes 20-31 are all zero.
+	reservedClean := true
+	for _, b := range buf[20:32] {
+		if b != 0 {
+			reservedClean = false
+			break
+		}
+	}
+
 	return &headerInfo{
 		MagicHex:       hex.EncodeToString(buf[0:8]),
 		MagicValid:     magicValid,
@@ -48,6 +59,7 @@ func readHeaderInfo(path string) (*headerInfo, error) {
 		HeaderFlags:    uint16(buf[10]) | uint16(buf[11])<<8,
 		FixedHdrSize:   uint32(buf[12]) | uint32(buf[13])<<8 | uint32(buf[14])<<16 | uint32(buf[15])<<24,
 		MetadataLength: uint32(buf[16]) | uint32(buf[17])<<8 | uint32(buf[18])<<16 | uint32(buf[19])<<24,
+		ReservedClean:  reservedClean,
 	}, nil
 }
 
@@ -149,6 +161,7 @@ func collectMediaItems(mediaDir string) ([]mdocx.MediaItem, error) {
 	if err != nil {
 		return nil, err
 	}
+	seenIDs := make(map[string]string) // id -> original path
 	out := make([]mdocx.MediaItem, 0, len(collected))
 	for _, rel := range collected {
 		fsPath := filepath.Join(mediaDir, rel)
@@ -158,12 +171,17 @@ func collectMediaItems(mediaDir string) ([]mdocx.MediaItem, error) {
 		}
 		containerPath := filepath.ToSlash(rel)
 		id := makeIDFromPath(containerPath)
+		if prevPath, ok := seenIDs[id]; ok {
+			return nil, fmt.Errorf("duplicate media ID %q generated from %q (conflicts with %q)", id, containerPath, prevPath)
+		}
+		seenIDs[id] = containerPath
 		m := detectMimeType(fsPath)
 		out = append(out, mdocx.MediaItem{
 			ID:       id,
 			Path:     containerPath,
 			MIMEType: m,
 			Data:     b,
+			SHA256:   sha256.Sum256(b),
 		})
 	}
 	return out, nil
@@ -288,4 +306,44 @@ func makeIDFromPath(p string) string {
 		return "media"
 	}
 	return id
+}
+
+// validateContainerPaths checks that all markdown paths and media paths/IDs are
+// valid container paths before encoding.
+func validateContainerPaths(doc *mdocx.Document) error {
+	for i, mf := range doc.Markdown.Files {
+		if _, err := sanitizeContainerPath(mf.Path); err != nil {
+			return fmt.Errorf("markdown file %d: %w", i, err)
+		}
+	}
+	for i, mi := range doc.Media.Items {
+		if mi.Path != "" {
+			if _, err := sanitizeContainerPath(mi.Path); err != nil {
+				return fmt.Errorf("media item %d: %w", i, err)
+			}
+		}
+		if strings.TrimSpace(mi.ID) == "" {
+			return fmt.Errorf("media item %d: empty ID", i)
+		}
+	}
+	return nil
+}
+
+// humanSize formats a byte count into a human-readable string.
+func humanSize(b int) string {
+	const (
+		kiB = 1024
+		miB = 1024 * kiB
+		giB = 1024 * miB
+	)
+	switch {
+	case b >= giB:
+		return fmt.Sprintf("%.2f GiB", float64(b)/float64(giB))
+	case b >= miB:
+		return fmt.Sprintf("%.2f MiB", float64(b)/float64(miB))
+	case b >= kiB:
+		return fmt.Sprintf("%.2f KiB", float64(b)/float64(kiB))
+	default:
+		return fmt.Sprintf("%d B", b)
+	}
 }

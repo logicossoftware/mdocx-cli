@@ -109,13 +109,14 @@ func newBrowseModel(doc *mdocx.Document, header *headerInfo, theme string, suppo
 
 	headerView := "(header unavailable)"
 	if header != nil {
-		headerView = fmt.Sprintf("Magic: %s\nMagic Valid: %t\nVersion: %d\nHeader Flags: 0x%04x\nFixed Header Size: %d\nMetadata Length: %d\n",
+		headerView = fmt.Sprintf("Magic: %s\nMagic Valid: %t\nVersion: %d\nHeader Flags: 0x%04x\nFixed Header Size: %d\nMetadata Length: %d\nReserved Clean: %t\n",
 			header.MagicHex,
 			header.MagicValid,
 			header.Version,
 			header.HeaderFlags,
 			header.FixedHdrSize,
 			header.MetadataLength,
+			header.ReservedClean,
 		)
 	}
 
@@ -415,9 +416,11 @@ func (m *browseModel) renderMediaSelection() string {
 }
 
 func buildRenderer(theme string, width int) (*glamour.TermRenderer, error) {
-	opts := []glamour.TermRendererOption{glamour.WithWordWrap(width), glamour.WithAutoStyle()}
+	opts := []glamour.TermRendererOption{glamour.WithWordWrap(width)}
 	if strings.TrimSpace(theme) != "" {
 		opts = append(opts, glamour.WithStylePath(theme))
+	} else {
+		opts = append(opts, glamour.WithAutoStyle())
 	}
 	return glamour.NewTermRenderer(opts...)
 }
@@ -481,6 +484,10 @@ func scaleImage(img image.Image, maxWidth, maxHeight int) image.Image {
 	bounds := img.Bounds()
 	origWidth := bounds.Dx()
 	origHeight := bounds.Dy()
+
+	if origWidth <= 0 || origHeight <= 0 {
+		return img
+	}
 
 	if origWidth <= maxWidth && origHeight <= maxHeight {
 		return img

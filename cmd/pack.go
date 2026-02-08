@@ -77,18 +77,30 @@ var packCmd = &cobra.Command{
 			},
 		}
 
+		if err := validateContainerPaths(doc); err != nil {
+			return fmt.Errorf("invalid bundle: %w", err)
+		}
+
 		out, err := os.Create(outputPath)
 		if err != nil {
 			return fmt.Errorf("create output: %w", err)
 		}
-		defer out.Close()
+		success := false
+		defer func() {
+			out.Close()
+			if !success {
+				os.Remove(outputPath)
+			}
+		}()
 
 		if err := mdocx.Encode(out, doc,
 			mdocx.WithMarkdownCompression(compression),
 			mdocx.WithMediaCompression(compression),
+			mdocx.WithVerifyHashesOnWrite(true),
 		); err != nil {
 			return fmt.Errorf("encode: %w", err)
 		}
+		success = true
 
 		fmt.Fprintf(cmd.OutOrStdout(), "Packed %d markdown files and %d media items into %s\n", len(markdownFiles), len(mediaItems), outputPath)
 		return nil

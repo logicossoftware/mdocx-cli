@@ -75,7 +75,7 @@ func TestPackHelpers_RoundTripEncodeDecode(t *testing.T) {
 		t.Fatalf("decode: %v", err)
 	}
 
-	result := buildValidationResult(decoded)
+	result := buildValidationResult(decoded, nil, nil)
 	if !result.Valid {
 		t.Fatalf("expected valid")
 	}

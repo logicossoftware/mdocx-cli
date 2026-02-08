@@ -23,14 +23,14 @@ func TestWriteUnpacked_BlocksPathTraversal(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	err := writeUnpacked(doc, outDir, &out)
+	err := writeUnpacked(doc, outDir, true, &out)
 	if err == nil {
 		t.Fatalf("expected error")
 	}
 
 	// Also block traversal via embedded segments.
 	doc.Markdown.Files[0].Path = "a/../evil.md"
-	err = writeUnpacked(doc, outDir, &out)
+	err = writeUnpacked(doc, outDir, true, &out)
 	if err == nil {
 		t.Fatalf("expected error")
 	}
@@ -54,7 +54,7 @@ func TestWriteUnpacked_WritesWithinOutputDir(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := writeUnpacked(doc, outDir, &out); err != nil {
+	if err := writeUnpacked(doc, outDir, true, &out); err != nil {
 		t.Fatalf("writeUnpacked: %v", err)
 	}
 

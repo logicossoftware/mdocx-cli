@@ -23,6 +23,7 @@ var unpackCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		outDir, _ := cmd.Flags().GetString("output")
 		strict, _ := cmd.Flags().GetBool("strict")
+		force, _ := cmd.Flags().GetBool("force")
 
 		input := args[0]
 		f, err := os.Open(input)
@@ -40,13 +41,24 @@ var unpackCmd = &cobra.Command{
 			return fmt.Errorf("decode: %w", err)
 		}
 
-		return writeUnpacked(doc, outDir, cmd.OutOrStdout())
+		return writeUnpacked(doc, outDir, force, cmd.OutOrStdout())
 	},
 }
 
-func writeUnpacked(doc *mdocx.Document, outDir string, out io.Writer) error {
+func writeUnpacked(doc *mdocx.Document, outDir string, force bool, out io.Writer) error {
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return fmt.Errorf("mkdir: %w", err)
+	}
+
+	// Helper to check for existing files when --force is not set.
+	checkOverwrite := func(path string) error {
+		if force {
+			return nil
+		}
+		if _, err := os.Stat(path); err == nil {
+			return fmt.Errorf("file already exists: %s (use --force to overwrite)", path)
+		}
+		return nil
 	}
 
 	if doc.Metadata != nil {
@@ -55,6 +67,9 @@ func writeUnpacked(doc *mdocx.Document, outDir string, out io.Writer) error {
 			return fmt.Errorf("metadata json: %w", err)
 		}
 		p := filepath.Join(outDir, "metadata.json")
+		if err := checkOverwrite(p); err != nil {
+			return err
+		}
 		if err := os.WriteFile(p, b, 0o644); err != nil {
 			return fmt.Errorf("write metadata: %w", err)
 		}
@@ -64,6 +79,9 @@ func writeUnpacked(doc *mdocx.Document, outDir string, out io.Writer) error {
 	for _, mf := range doc.Markdown.Files {
 		p, err := safeJoinOutput(outDir, mf.Path)
 		if err != nil {
+			return err
+		}
+		if err := checkOverwrite(p); err != nil {
 			return err
 		}
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
@@ -84,6 +102,9 @@ func writeUnpacked(doc *mdocx.Document, outDir string, out io.Writer) error {
 		if err != nil {
 			return err
 		}
+		if err := checkOverwrite(p); err != nil {
+			return err
+		}
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 			return fmt.Errorf("mkdir: %w", err)
 		}
@@ -101,4 +122,5 @@ func init() {
 
 	unpackCmd.Flags().StringP("output", "o", "out", "output directory")
 	unpackCmd.Flags().Bool("strict", true, "fail on any spec violation")
+	unpackCmd.Flags().BoolP("force", "f", false, "overwrite existing files")
 }
